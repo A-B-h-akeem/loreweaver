@@ -1,0 +1,22 @@
+[theme]
+base = "dark"
+primaryColor = "#b5523b"
+backgroundColor = "#14110f"
+secondaryBackgroundColor = "#221c18"
+textColor = "#ece3d6"
+borderColor = "#3a302a"
+linkColor = "#e09f6b"
+font = "'Crimson Pro':https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;500;600;700&display=swap"
+headingFont = "Cinzel:https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&display=swap"
+baseFontSize = 17
+baseRadius = "medium"
+chartCategoricalColors = ["#e07a5f", "#3d9970", "#4ea8de", "#9d4edd", "#f2c14e", "#c1121f", "#8d99ae"]
+
+[theme.sidebar]
+backgroundColor = "#1b1613"
+
+[client]
+toolbarMode = "minimal"
+
+[server]
+headless = true

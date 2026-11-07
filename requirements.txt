@@ -1,0 +1,12 @@
+ollama>=0.6
+pydantic>=2.7
+pydantic-settings>=2.3
+numpy>=1.26
+networkx>=3.2
+scipy>=1.11
+json-repair>=0.30
+streamlit>=1.57
+pyvis>=0.3.2
+pandas>=2.0
+rich>=13
+pytest>=8
