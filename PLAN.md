@@ -174,7 +174,7 @@ eval/recall_eval.py automated playthrough + memory-recall benchmark
 7. Streamlit UI (story, sheet, graph, codex, timeline, inspector, director)
 8. Recall evaluation script, README
 
-Status: phase 1 is complete (18 tests, recall Hit@5 90% on a held-out story). Phase 2 is complete (41 tests; see README for evaluation). Phase 3 is complete (44 tests; results in §13 and the README). Final real-model smoke run on 2026-11-07: 6 autoplay turns, 0 JSON fallbacks, the UI renders without errors.
+Status: phase 1 is complete (18 tests, recall Hit@5 90% on a held-out story). Phase 2 is complete (41 tests; see README for evaluation). Phase 3 is complete (44 tests; results in §13 and the README; 45 with the Director-plan guard). Final real-model smoke run on 2026-11-07: 6 autoplay turns, 0 JSON fallbacks, the UI renders without errors.
 
 ---
 

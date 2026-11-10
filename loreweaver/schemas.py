@@ -5,6 +5,7 @@ so validators coerce instead of rejecting wherever the intent is clear.
 """
 from __future__ import annotations
 
+import re
 from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -125,6 +126,24 @@ class ArcPlan(BaseModel):
     _v_act = field_validator("current_act", mode="before")(lambda v: _clamp(v, 1, 3, 1))
     _v_ten = field_validator("tension", mode="before")(lambda v: _clamp(v, 1, 10, 3))
     _v_lists = field_validator("next_beats", "callbacks", "consequences_to_payoff", mode="before")(_str_list)
+
+    @model_validator(mode="after")
+    def _drop_degenerate(self):
+        """Under grammar-constrained output the model sometimes 'thinks' inside a string ("I will ensure the
+        JSON is valid…" repeated for 2,000+ chars; ~1 in 4 Director calls, with or without compact JSON).
+        A beat is one sentence: drop list items that are runaway or talk about the format, and cut a runaway
+        text field back to its first sentence. Garbage here would otherwise steer the narrator."""
+        def meta(s: str) -> bool:      # format talk, or a bare field name such as "tension_rising"
+            return "json" in s.lower() or ("_" in s and " " not in s.strip())
+
+        for f in ("next_beats", "callbacks", "consequences_to_payoff"):
+            setattr(self, f, [x for x in getattr(self, f) if len(x) <= 300 and not meta(x)])
+        for f in ("premise", "act_goal", "foreshadowing"):
+            s = getattr(self, f)
+            if len(s) > 400 or meta(s):
+                first = re.split(r"(?<=[.!?])\s", s, maxsplit=1)[0]
+                setattr(self, f, "" if meta(first) or len(first) > 400 else first)
+        return self
 
 
 # ----------------------------------------------------------------------------- adjudicator

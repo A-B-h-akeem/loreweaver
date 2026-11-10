@@ -9,6 +9,13 @@ share one connected memory.
 
 Everything runs locally on an 8 GB GPU (`qwen3.5:4b` + `qwen3-embedding:0.6b` through Ollama).
 
+**▶ Demo video (2½ min):** [`demo/loreweaver_demo.mp4`](demo/loreweaver_demo.mp4). It shows a new adventure built
+from a theme, two turns (a dice choice that starts a fight, then a free-text bargain that becomes a remembered
+decision with a consequence clock), and a tour of the memory graph, Codex, Recall inspector and Director.
+Long model waits are sped up in the edit; everything else plays at real speed.
+
+**Run it:** see [How to run it](#how-to-run-it).
+
 ## How it meets the problem statement
 
 | Requirement | Implementation |
@@ -78,17 +85,85 @@ Each change can be switched off for ablation: `compact_json`, `warm_prefix`, `ga
 * **Hybrid retrieval:** exact names, dense, BM25 and edge-relation channels are fused by RRF and spread with query-gated Personalized PageRank (√degree-normalized). Results are scored on relevance, graph, importance and recency, with boosts for open threads and clocks near firing, then packed into sections within a token budget.
 * **Entity resolution:** exact/alias → distinctive token subset → fuzzy → embedding. Generic words never merge, and numbered individuals ("Cult Guard 1/2") never merge.
 
-## Setup
+## How to run it
 
+Everything runs locally: no API keys, no cloud calls. The only network address in the code is the local
+Ollama server (`http://localhost:11434`).
+
+### 1. Requirements
+- **Python 3.11** (tested on 3.11.9)
+- **[Ollama](https://ollama.com/download)** (tested on 0.23.2)
+- **A GPU with about 8 GB of VRAM** (tested on an RTX 5060 Laptop). It runs on CPU too, only much slower.
+- About 4 GB of disk for the two models
+
+### 2. Get the code and install the Python packages
 ```bash
-ollama pull qwen3.5:4b
-ollama pull qwen3-embedding:0.6b
+git clone https://github.com/A-B-h-akeem/loreweaver.git
+cd loreweaver
+python -m venv .venv
+.venv\Scripts\activate            # Windows   (macOS/Linux: source .venv/bin/activate)
 pip install -r requirements.txt
-streamlit run app.py          # web UI
-python cli.py                 # terminal client (/sheet /clocks /memory)
 ```
 
-Settings in `loreweaver/config.py` can be overridden with `LOREWEAVER_*` environment variables (model, context size, `use_ledger`, `continuity_check`, `front_min_turn`…). Saves go to `data/loreweaver.db`.
+### 3. Download the models (once)
+```bash
+ollama pull qwen3.5:4b             # storyteller: all seven agents (about 3.4 GB)
+ollama pull qwen3-embedding:0.6b   # embeddings for memory search (about 0.6 GB)
+```
+
+### 4. Start Ollama
+Open the Ollama app, or run this in a separate terminal and leave it running:
+```bash
+ollama serve
+```
+
+### 5. Play
+```bash
+streamlit run app.py               # web UI at http://localhost:8501
+```
+1. Enter a theme (or pick an idea), a hero name and a class, then press **Begin adventure**. Building the world takes 20–60 s.
+2. Click a choice or type any action in the box at the bottom.
+3. While you read, the Chronicler writes the scene into memory. The sidebar shows "Memory up to date" when it's done.
+4. Explore the other tabs: **Memory graph**, **Codex**, **Timeline**, **Recall inspector** and **Director**.
+5. Use **Library** to resume a tale, or start a new tale in an existing world so its characters return.
+
+A terminal client is also included:
+```bash
+python cli.py                                          # interactive (/sheet /clocks /memory /quit)
+python cli.py --auto 6 --theme "a haunted lighthouse"  # autoplay 6 turns as a smoke test
+```
+
+### 6. Run the tests (no GPU or Ollama needed)
+```bash
+python -m pytest -q
+```
+
+### 7. Run the evaluations (need Ollama and the models)
+```bash
+python eval/acceptance_eval.py --turns 12                  # M1-P8 requirement checks, about 20 min
+python eval/recall_eval.py --play 15 --theme "..."         # memory recall benchmark + ablations
+python eval/consistency_eval.py --db data/loreweaver.db --story 1 --reps 3   # adversarial consistency
+python eval/latency_eval.py --db data/loreweaver.db --story 1 --turns 4      # phase 2 vs phase 3 latency
+```
+`recall_eval` can also run on an existing story with `--story ID`. The other evals need a story that has
+already been played; the story id is printed at the end of `cli.py`.
+
+### 8. Re-record the demo video (optional)
+This needs Chrome and [OBS Studio](https://obsproject.com/), with the OBS websocket server enabled
+(*Tools → WebSocket Server Settings*).
+```bash
+pip install -r demo/requirements.txt
+set LOREWEAVER_DB_PATH=data\demo.db    # a fresh database keeps the library empty (macOS/Linux: export ...)
+streamlit run app.py
+python demo/record_demo.py --record    # in a second terminal: drives Chrome while OBS records
+python demo/make_video.py              # speeds up the model's waits -> demo/loreweaver_demo.mp4
+```
+`record_demo.py` creates its own OBS profile and scene collection, then switches back to yours afterwards.
+
+### Configuration
+Settings in `loreweaver/config.py` can be overridden with `LOREWEAVER_*` environment variables, for example
+`LOREWEAVER_LLM_MODEL`, `LOREWEAVER_NUM_CTX`, `LOREWEAVER_USE_LEDGER`, `LOREWEAVER_CONTINUITY_CHECK`,
+`LOREWEAVER_FRONT_MIN_TURN` or `LOREWEAVER_DB_PATH`. Saves go to `data/loreweaver.db` by default.
 
 **Hardware notes (RTX 5060 Laptop, 8 GB):**
 - Both models stay resident (about 7.2 GB).
@@ -182,14 +257,31 @@ A 6-turn autoplay with the final settings (`python cli.py --auto 6 --theme "…"
 - **Memory:** 2 decisions started clocks, and 3 clocks were ticking at the end. The graph held 18 events, 6 locations and 201 edges.
 - **Continuity:** 0 repairs were needed.
 
+### Acceptance against the problem statement: `eval/acceptance_eval.py`
+Each clause of M1-P8 is turned into checks on the real model. Deterministic checks read the memory graph.
+Judged checks use a blind forced choice between the truth and a decoy, asked in both option orders and backed
+by a quote from the scene. **First real run: 18/23 checks passed** (19 min, 211 LLM calls, 0 JSON fallbacks).
+
+| Requirement | Passed | Highlights |
+|---|---|---|
+| User provides a theme | 4/4 | Two contrasting themes each produced a full world; the judge matched each opening to its own theme |
+| Continuously evolving story | 4/4 | 12/12 new scenes, 11/12 turns added memory, tension rose 3→9, the campaign threat advanced on its own |
+| Remembers characters and events | 4/6 | 7/7 later scenes brought back entities from 5+ turns earlier; recall Hit@5 69% vs 46% for plain vector RAG (just under the 70% bar) |
+| Decisions change later segments | 4/7 | Branched at the same turn: protect vs betray an NPC, then identical actions. Both decisions were stored with clocks and recalled, and the continuations differed. The betrayal was echoed for turns afterwards. A forced clock made its payoff mandatory and was marked fired |
+
+What fell short: a kind decision left a much fainter mark than a harsh one, a forced payoff was only partly
+shown (the rules don't let prose kill the hero), and one portrayal check failed because entity descriptions
+grow into long run-on text. The attitude check counted edges in both directions, which was a bug in the test
+itself; it is now fixed.
+
 ## Tests
 
 ```bash
 python -m pytest -q
 ```
 
-44 tests, no GPU needed. They cover:
-- **rules and parsing:** dice, choice parsing, JSON drift tolerance, the constrained-JSON path and its fallback
+45 tests, no GPU needed. They cover:
+- **rules and parsing:** dice, choice parsing, JSON drift tolerance, the constrained-JSON path and its fallback, and dropping text the model "thought" into a field of the Director's plan
 - **memory:** the temporal store, FTS, entity resolution (including numbered individuals), graph recall of unmentioned connected memories, relation-aware recall, cross-story labelling, a contradicting relation superseding the old one (`valid_to`)
 - **efficiency:** the warmed prefix is an exact prefix of the next narrator prompt (so the KV cache is reused); the checker runs only on risk signals
 - **grounding and guards:** evidence grounding, the resurrection and phantom-item guards
@@ -212,7 +304,11 @@ loreweaver/
   combat.py          encounter engine
   memory/  store.py graph.py resolver.py retriever.py
   agents/  worldbuilder.py adjudicator.py narrator.py chronicler.py director.py summarizer.py continuity.py
-app.py · cli.py · eval/recall_eval.py · eval/consistency_eval.py · eval/latency_eval.py · tests/ · PLAN.md
+app.py             Streamlit UI          cli.py   terminal client
+eval/              acceptance_eval.py recall_eval.py consistency_eval.py latency_eval.py
+demo/              record_demo.py (drives Chrome + OBS) · make_video.py (edits the take) · loreweaver_demo.mp4
+tests/             45 unit and end-to-end tests (fake LLM, no GPU)
+PLAN.md            design, research notes and lessons from real runs, phase by phase
 ```
 
 ## Limitations

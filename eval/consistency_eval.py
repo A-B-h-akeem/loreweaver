@@ -52,9 +52,15 @@ JUDGE_SYSTEM = ("You are a strict fact-checking judge. Answer the question about
 
 
 def judge(llm, scene: str, question: str) -> bool:
-    v = llm.json(JUDGE_SYSTEM, f"SCENE:\n{scene}\n\nQUESTION: {question}\n\nReply with JSON: "
-                               '{"answer": true|false, "quote": "exact sentence or empty"}', Verdict,
-                 temperature=0.0, max_tokens=200, agent="judge")
+    # without the compact-output instruction: "omit any field you would leave empty" biases a yes/no judge
+    # toward {"answer": false} (seen in eval/acceptance_eval.py), which would hide contradictions
+    compact, settings.compact_json = settings.compact_json, False
+    try:
+        v = llm.json(JUDGE_SYSTEM, f"SCENE:\n{scene}\n\nQUESTION: {question}\n\nReply with JSON: "
+                                   '{"answer": true|false, "quote": "exact sentence or empty"}', Verdict,
+                     temperature=0.0, max_tokens=200, agent="judge")
+    finally:
+        settings.compact_json = compact
     norm = lambda s: re.sub(r"\W+", " ", s.lower()).strip()  # noqa: E731
     return bool(v.answer and v.quote and norm(v.quote)[:60] in norm(scene))   # unevidenced "yes" = no
 

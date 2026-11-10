@@ -1,5 +1,15 @@
 from loreweaver.llm import parse_model
-from loreweaver.schemas import Extraction
+from loreweaver.schemas import ArcPlan, Extraction
+
+
+def test_arc_plan_drops_text_where_the_model_thought_inside_a_string():
+    loop = "Wait, I need to ensure the JSON is minified. " + "I will ensure the JSON is valid. " * 60
+    arc = ArcPlan.model_validate({"premise": "Vex must stop the Rising Curse.",
+                                  "next_beats": ["Elara offers a trade.", loop, "The tide breaches the market.",
+                                                 "tension_rising"],
+                                  "foreshadowing": "The bell rings at dawn. " + "The bell rings again. " * 30})
+    assert arc.next_beats == ["Elara offers a trade.", "The tide breaches the market."]
+    assert arc.foreshadowing == "The bell rings at dawn." and arc.premise == "Vex must stop the Rising Curse."
 
 
 def test_extraction_tolerates_small_model_drift():
